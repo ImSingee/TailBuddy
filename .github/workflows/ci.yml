@@ -15,7 +15,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Unit and headless MyGo Native tests
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -v ./...
       - name: Static analysis
         run: go vet ./...
       - name: Formatting
@@ -33,7 +33,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Native platform unit tests (offline)
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -v ./...
       - name: Package app and official userspace engine
         run: scripts/build-macos.sh ${{ matrix.arch }}
       - name: Inspect bundle
@@ -42,6 +42,13 @@ jobs:
           codesign --verify --deep --strict build/darwin-${{ matrix.arch }}/TailBuddy.app
           file build/darwin-${{ matrix.arch }}/TailBuddy.app/Contents/MacOS/TailBuddy
           file build/darwin-${{ matrix.arch }}/TailBuddy.app/Contents/Helpers/tailscaled
+      - name: Native UI and per-app language smoke test (host architecture)
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          if [[ "$(go env GOARCH)" == "$TARGET_ARCH" ]]; then
+            python3 scripts/smoke-macos.py "build/darwin-$TARGET_ARCH/TailBuddy.app"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: TailBuddy-macos-${{ matrix.arch }}

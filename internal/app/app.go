@@ -22,6 +22,7 @@ const Version = "0.1.0"
 // its own state. Slow operations are serialized by busy and never block drawing.
 type App struct {
 	ctx                                            context.Context
+	smoke                                          bool
 	words                                          i18n.Catalog
 	engine                                         *engine.Engine
 	cfg                                            config.Config
@@ -46,6 +47,18 @@ func New() *App {
 	return &App{words: i18n.New("en"), tab: "overview", cfg: config.Default(), ctx: context.Background()}
 }
 func (a *App) t(s string) string { return a.words.T(s) }
+
+// RunSmoke exercises native window/tray creation without starting networking.
+func (a *App) RunSmoke() error {
+	a.smoke = true
+	if err := a.Run(); err != nil {
+		return err
+	}
+	if a.fatal != "" {
+		return fmt.Errorf("native UI initialization failed")
+	}
+	return nil
+}
 
 func (a *App) Run() error {
 	mygo.App.SetName("TailBuddy")
@@ -148,8 +161,11 @@ func (a *App) ready() {
 			}
 		}
 	}()
-	if !mygo.App.WasOpenedAtLogin() || a.fatal != "" {
+	if !mygo.App.WasOpenedAtLogin() || a.fatal != "" || a.smoke {
 		a.show()
+	}
+	if a.smoke {
+		time.AfterFunc(2*time.Second, func() { mygo.App.Quit() })
 	}
 }
 func helperPath() (string, error) {
