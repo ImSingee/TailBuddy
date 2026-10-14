@@ -104,7 +104,7 @@ func (e *Engine) Start(ctx context.Context, c config.Config) error {
 	if err != nil {
 		return err
 	}
-	if !c.ConsentAccepted || !c.PersistCredentials {
+	if !c.HasConsent() {
 		return ErrConsentRequired
 	}
 	if len(c.AdvertiseRoutes) > 0 && !c.SubnetConsentAccepted {
@@ -493,7 +493,7 @@ func (e *Engine) ApplyConfig(ctx context.Context, c config.Config) error {
 	if err != nil {
 		return err
 	}
-	if !c.ConsentAccepted || !c.PersistCredentials {
+	if !c.HasConsent() {
 		return ErrConsentRequired
 	}
 	if len(c.AdvertiseRoutes) > 0 && !c.SubnetConsentAccepted {

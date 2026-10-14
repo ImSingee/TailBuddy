@@ -26,11 +26,13 @@ The app is not Apple-notarized, so macOS may block it from opening.
 
 ## Get connected
 
-1. Review the access notice and approve inbound access and saving your login.
-2. Click **Connect**, then **Sign in to Tailscale**. Sign in to the network you want to use.
+1. Click **Connect**. On your first connection, a dialog asks you to approve inbound access and saving your login. This approval is remembered.
+2. If asked, click **Sign in to Tailscale** and sign in to the network you want to use.
 3. From another permitted device on that network, open the service using TailBuddy's displayed address and its usual port. For example, a website running on port 3000 is available at `http://<TailBuddy-address>:3000`.
 
-Closing the window leaves TailBuddy running. **Disconnect** or **Quit** stops access but keeps your login for next time. Opening the app, including at Mac login, never connects automatically.
+Closing the window leaves TailBuddy running. **Quit** stops access; reopening the app resumes your previous connection, including when opened at Mac login. **Disconnect** stops access and keeps the node disconnected on future launches until you choose **Connect** again. Both keep your saved login.
+
+Upgrading from an older version? Your saved login and approvals are kept. Click **Connect** once to resume and remember your connection choice; you do not need to approve the same access again.
 
 ### Optional subnet access
 

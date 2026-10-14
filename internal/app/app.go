@@ -24,7 +24,7 @@ type App struct {
 	ctx                                            context.Context
 	smoke                                          bool
 	words                                          i18n.Catalog
-	engine                                         *engine.Engine
+	engine                                         nodeEngine
 	cfg                                            config.Config
 	stateDir                                       string
 	snapshot                                       engine.Snapshot
@@ -36,15 +36,19 @@ type App struct {
 	message                                        string
 	fatal                                          string
 	routes                                         string
+	hostname                                       string
 	subnets                                        bool
 	accessConsent, credentialConsent, routeConsent bool
+	consentOpen                                    bool
+	disconnectSavePending                          bool
 	loginItem                                      bool
 	quitting, readyToQuit                          bool
 	cancel                                         context.CancelFunc
+	dispatch                                       func(func())
 }
 
 func New() *App {
-	return &App{words: i18n.New("en"), tab: "overview", cfg: config.Default(), ctx: context.Background()}
+	return &App{words: i18n.New("en"), tab: "overview", cfg: config.Default(), hostname: config.Default().Hostname, ctx: context.Background(), dispatch: mygo.RunOnMain}
 }
 func (a *App) t(s string) string { return a.words.T(s) }
 
@@ -116,18 +120,19 @@ func (a *App) ready() {
 		if err != nil {
 			a.fatal = a.t("missingHelper")
 		} else {
-			a.engine, err = engine.New(engine.Options{HelperPath: helper, StateDir: a.stateDir})
+			node, err := engine.New(engine.Options{HelperPath: helper, StateDir: a.stateDir})
 			if err != nil {
 				a.fatal = err.Error()
+			} else {
+				a.engine = node
 			}
 		}
 	}
 	a.routes = strings.Join(a.cfg.AdvertiseRoutes, "\n")
+	a.hostname = a.cfg.Hostname
 	a.subnets = len(a.cfg.AdvertiseRoutes) > 0
-	// Each process launch begins disconnected. Consent is reviewed before Connect.
-	a.accessConsent = false
-	a.credentialConsent = false
-	a.routeConsent = false
+	// Persisted approval belongs to its scope, not to the UI's lifetime.
+	a.routeConsent = a.cfg.SubnetConsentAccepted
 	a.menu = mygo.NewMenu([]*mygo.MenuItem{
 		{ID: "status", Label: "TailBuddy · " + a.t("offline"), Disabled: true},
 		{Label: a.t("settings"), Click: func(*mygo.MenuItem, *mygo.Window) { a.show() }},
@@ -166,6 +171,8 @@ func (a *App) ready() {
 	}
 	if a.smoke {
 		time.AfterFunc(2*time.Second, func() { mygo.App.Quit() })
+	} else {
+		a.resumeConnection()
 	}
 }
 func helperPath() (string, error) {
@@ -187,6 +194,7 @@ func (a *App) show() {
 		return
 	}
 	a.window = mygo.NewWindow(mygo.WindowOptions{Title: "TailBuddy", Width: 760, Height: 820, MinWidth: 620, MinHeight: 620, Content: ui.View(a.view)})
+	a.window.OnClosed(func() { a.dismissConsent() })
 	a.window.Focus()
 }
 func (a *App) redraw() {
@@ -201,7 +209,7 @@ func (a *App) refresh() {
 	if a.menu != nil {
 		a.menu.ItemByID("status").SetLabel("TailBuddy · " + a.statusLabel())
 		a.updateLoginMenuItem(a.menu.ItemByID("login"))
-		a.menu.ItemByID("disconnect").SetEnabled(a.snapshot.Active && !a.busy)
+		a.menu.ItemByID("disconnect").SetEnabled(a.canDisconnect() && !a.busy && !a.consentOpen)
 	}
 	if a.tray != nil {
 		a.tray.SetToolTip("TailBuddy · " + a.statusLabel())
@@ -216,7 +224,7 @@ func (a *App) needsLogin() bool {
 }
 func (a *App) updateLoginMenuItem(item *mygo.MenuItem) {
 	item.SetVisible(a.needsLogin())
-	item.SetEnabled(a.needsLogin() && !a.busy && !a.quitting)
+	item.SetEnabled(a.needsLogin() && !a.busy && !a.quitting && !a.consentOpen)
 }
 func (a *App) statusLabel() string {
 	if a.fatal != "" {
@@ -277,6 +285,9 @@ func (a *App) statusHelp() string {
 	}
 }
 func (a *App) run(action func() error, success string) {
+	a.runAfter(action, success, nil)
+}
+func (a *App) runAfter(action func() error, success string, complete func(error)) {
 	if a.busy || a.quitting {
 		return
 	}
@@ -288,8 +299,11 @@ func (a *App) run(action func() error, success string) {
 		if a.ctx.Err() != nil {
 			return
 		}
-		mygo.RunOnMain(func() {
+		a.dispatch(func() {
 			a.busy = false
+			if complete != nil {
+				complete(err)
+			}
 			if err != nil {
 				a.message = err.Error()
 			} else {
@@ -301,8 +315,7 @@ func (a *App) run(action func() error, success string) {
 }
 func (a *App) candidate() (config.Config, error) {
 	cfg := a.cfg
-	cfg.ConsentAccepted = a.accessConsent
-	cfg.PersistCredentials = a.credentialConsent
+	cfg.Hostname = a.hostname
 	cfg.SubnetConsentAccepted = a.routeConsent
 	cfg.AdvertiseRoutes = nil
 	if a.subnets {
@@ -317,11 +330,13 @@ func (a *App) candidate() (config.Config, error) {
 	return config.Validate(cfg)
 }
 func (a *App) connect() {
-	if a.engine == nil {
+	if a.engine == nil || a.fatal != "" || a.busy || a.quitting || a.snapshot.Active || a.consentOpen {
 		return
 	}
-	if !a.accessConsent || !a.credentialConsent {
-		a.message = a.t("needsConsent")
+	if !a.cfg.HasConsent() {
+		a.accessConsent, a.credentialConsent = false, false
+		a.consentOpen = true
+		a.redraw()
 		return
 	}
 	cfg, err := a.candidate()
@@ -329,33 +344,31 @@ func (a *App) connect() {
 		a.message = err.Error()
 		return
 	}
-	a.cfg = cfg
-	a.run(func() error {
-		if err := config.Save(a.stateDir, cfg); err != nil {
-			return err
-		}
-		return a.engine.Start(a.ctx, cfg)
-	}, "")
+	a.startConnection(cfg)
 }
 func (a *App) disconnect() {
-	if a.engine == nil {
+	if a.busy || a.quitting || a.consentOpen {
 		return
 	}
-	a.run(func() error {
+	a.cfg.ConnectionWanted = false
+	cfg := a.cfg
+	a.runAfter(func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return a.engine.Stop(ctx)
-	}, "")
+		return disconnectNode(ctx, a.stateDir, cfg, a.engine, a.t("disconnectSaveError"))
+	}, "", func(err error) { a.disconnectSavePending = err != nil })
 }
 func (a *App) save() {
+	if a.busy || a.quitting || a.consentOpen || a.fatal != "" {
+		return
+	}
 	cfg, err := a.candidate()
 	if err != nil {
 		a.message = err.Error()
 		return
 	}
-	a.cfg = cfg
 	running := a.snapshot.Active
-	a.run(func() error {
+	a.runAfter(func() error {
 		if running {
 			ctx, cancel := context.WithTimeout(a.ctx, 15*time.Second)
 			defer cancel()
@@ -364,11 +377,15 @@ func (a *App) save() {
 			}
 		}
 		return config.Save(a.stateDir, cfg)
-	}, a.t("saved"))
+	}, a.t("saved"), func(err error) {
+		if err == nil {
+			a.cfg = cfg
+		}
+	})
 }
 func (a *App) signIn() {
 	// Ignore a stale menu/button callback after the reported state has changed.
-	if a.engine == nil || !a.needsLogin() || a.busy || a.quitting {
+	if a.engine == nil || !a.needsLogin() || a.busy || a.quitting || a.consentOpen || !a.cfg.HasConsent() {
 		return
 	}
 	a.run(func() error {

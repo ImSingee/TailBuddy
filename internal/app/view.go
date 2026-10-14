@@ -55,6 +55,7 @@ func (a *App) view(c *ui.Context) {
 		ui.Divider(c)
 		ui.Text(c, a.t("noTunnel")).Padding(12, 28).FontSize(11).TextColor(t.TextMuted)
 	})
+	a.consentView(c)
 }
 func (a *App) notice(c *ui.Context, text string, danger bool) {
 	color := c.Theme().Accent
@@ -76,8 +77,13 @@ func (a *App) pair(c *ui.Context, label, value string) {
 func (a *App) overviewView(c *ui.Context) {
 	a.card(c, a.t("status"), func() {
 		if !a.snapshot.Active {
-			ui.Text(c, a.t("resting")).FontSize(24).Bold()
-			ui.Text(c, a.t("restingHelp")).TextColor(c.Theme().TextMuted)
+			if a.cfg.HasConsent() {
+				ui.Text(c, a.t("offline")).FontSize(24).Bold()
+				ui.Text(c, a.t("disconnectedHelp")).TextColor(c.Theme().TextMuted)
+			} else {
+				ui.Text(c, a.t("resting")).FontSize(24).Bold()
+				ui.Text(c, a.t("restingHelp")).TextColor(c.Theme().TextMuted)
+			}
 		} else {
 			ui.Text(c, a.statusLabel()).FontSize(24).Bold()
 			a.pair(c, a.t("identity"), first(a.snapshot.DNSName, a.snapshot.Hostname, a.cfg.Hostname))
@@ -90,17 +96,18 @@ func (a *App) overviewView(c *ui.Context) {
 			}
 		}
 		ui.Row(c).Gap(10).Wrap().Children(func() {
-			if a.snapshot.Active {
+			if a.canDisconnect() {
 				if ui.Button(c, a.t("disconnect")).Disabled(a.busy).Clicked() {
 					a.disconnect()
 				}
-				if a.needsLogin() {
-					if ui.PrimaryButton(c, a.t("login")).Disabled(a.busy || a.quitting).Clicked() {
-						a.signIn()
-					}
+			}
+			if a.needsLogin() {
+				if ui.PrimaryButton(c, a.t("login")).Disabled(a.busy || a.quitting).Clicked() {
+					a.signIn()
 				}
-			} else {
-				if ui.PrimaryButton(c, a.t("connect")).Disabled(a.busy || a.engine == nil).Clicked() {
+			}
+			if !a.snapshot.Active {
+				if ui.PrimaryButton(c, a.t("connect")).Disabled(a.busy || a.engine == nil || a.fatal != "").Clicked() {
 					a.connect()
 				}
 			}
@@ -108,12 +115,11 @@ func (a *App) overviewView(c *ui.Context) {
 				ui.Text(c, a.t("working")).TextColor(c.Theme().TextMuted)
 			}
 		})
+		ui.Text(c, a.t("resumeHelp")).FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 	a.card(c, a.t("scope"), func() {
 		ui.Text(c, a.t("scopeTitle")).FontSize(18).Bold()
 		ui.Text(c, a.t("scopeDetail"))
-		ui.Checkbox(c, &a.accessConsent, a.t("consent")).Disabled(a.snapshot.Active || a.busy)
-		ui.Checkbox(c, &a.credentialConsent, a.t("persist")).Disabled(a.snapshot.Active || a.busy)
 		ui.Text(c, a.t("credentials")).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Text(c, a.t("limits")).FontSize(12).TextColor(c.Theme().TextMuted)
 	})
@@ -129,13 +135,37 @@ func (a *App) overviewView(c *ui.Context) {
 		a.pair(c, a.t("health"), strings.Join(a.snapshot.Health, "\n"))
 	}
 }
+
+func (a *App) consentView(c *ui.Context) {
+	width, height := c.Size()
+	if ui.Modal(c, &a.consentOpen, func() {
+		ui.Scroll(c).Width(min(580, width-80)).MaxHeight(min(560, height-80)).Gap(16).Children(func() {
+			ui.Text(c, a.t("consentTitle")).FontSize(22).Bold()
+			ui.Text(c, a.t("scopeDetail"))
+			ui.Checkbox(c, &a.accessConsent, a.t("consent"))
+			ui.Checkbox(c, &a.credentialConsent, a.t("persist"))
+			ui.Text(c, a.t("consentRemembered")).TextColor(c.Theme().TextMuted)
+			ui.Text(c, a.t("resumeHelp")).TextColor(c.Theme().TextMuted)
+			ui.Row(c).Gap(10).Children(func() {
+				if ui.Button(c, a.t("cancel")).Clicked() {
+					a.dismissConsent()
+				}
+				if ui.PrimaryButton(c, a.t("confirmConnect")).Disabled(!a.accessConsent || !a.credentialConsent).Clicked() {
+					a.confirmConsent()
+				}
+			})
+		})
+	}).Dismissed() {
+		a.dismissConsent()
+	}
+}
 func (a *App) accessView(c *ui.Context) {
 	a.card(c, a.t("hostname"), func() {
-		ui.TextInput(c, &a.cfg.Hostname).Label(a.t("hostname")).Disabled(a.busy)
+		ui.TextInput(c, &a.hostname).Label(a.t("hostname")).Disabled(a.busy)
 		ui.Text(c, a.t("hostHelp")).FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 	a.card(c, a.t("subnets"), func() {
-		if ui.Checkbox(c, &a.subnets, a.t("subnets")).Disabled(a.busy).Changed() {
+		if ui.Checkbox(c, &a.subnets, a.t("enableSubnets")).Disabled(a.busy).Changed() {
 			a.routeConsent = false
 		}
 		ui.Text(c, a.t("subnetsHelp")).TextColor(c.Theme().TextMuted)

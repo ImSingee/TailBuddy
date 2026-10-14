@@ -19,6 +19,9 @@ import (
 // Config deliberately has no proxy, DNS, route-acceptance, or exit-node settings.
 // Consent flags must be set by an explicit user-facing consent flow.
 type Config struct {
+	SchemaVersion         int      `json:"schemaVersion"`
+	ConsentVersion        int      `json:"consentVersion"`
+	ConnectionWanted      bool     `json:"connectionWanted"`
 	Hostname              string   `json:"hostname"`
 	AdvertiseRoutes       []string `json:"advertiseRoutes"`
 	ConsentAccepted       bool     `json:"consentAccepted"`
@@ -26,7 +29,23 @@ type Config struct {
 	SubnetConsentAccepted bool     `json:"subnetConsentAccepted"`
 }
 
-func Default() Config { return Config{Hostname: "tailbuddy", AdvertiseRoutes: []string{}} }
+const CurrentSchemaVersion = 1
+
+// Increment this when the inbound access or credential-storage scope changes.
+// A stale approval may never enable an automatic or explicit connection.
+const CurrentConsentVersion = 1
+
+func Default() Config {
+	return Config{SchemaVersion: CurrentSchemaVersion, Hostname: "tailbuddy", AdvertiseRoutes: []string{}}
+}
+
+func (c Config) HasConsent() bool {
+	return c.ConsentVersion == CurrentConsentVersion && c.ConsentAccepted && c.PersistCredentials
+}
+
+func (c Config) CanResume() bool {
+	return c.ConnectionWanted && c.HasConsent() && (len(c.AdvertiseRoutes) == 0 || c.SubnetConsentAccepted)
+}
 
 var hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
 var forbidden = []netip.Prefix{
@@ -42,6 +61,10 @@ var forbidden = []netip.Prefix{
 // range, including broad ranges that contain a forbidden range. Host routes are
 // allowed, but default routes and IPv4-mapped IPv6 are never accepted.
 func Validate(c Config) (Config, error) {
+	if c.SchemaVersion < 0 || c.SchemaVersion > CurrentSchemaVersion {
+		return Config{}, errors.New("configuration was created by an unsupported app version")
+	}
+	c.SchemaVersion = CurrentSchemaVersion
 	c.Hostname = strings.ToLower(strings.TrimSpace(c.Hostname))
 	if c.Hostname != "" && !hostnamePattern.MatchString(c.Hostname) {
 		return Config{}, errors.New("hostname must be one DNS label of 1–63 letters, digits, or internal hyphens")
@@ -203,6 +226,16 @@ func Load(dir string) (Config, error) {
 	}
 	if d.Decode(new(any)) != io.EOF {
 		return Config{}, errors.New("trailing configuration JSON")
+	}
+	if c.SchemaVersion == 0 {
+		// Older releases persisted these approvals but never persisted connection
+		// intent. Keep the approvals and daemon credentials, but do not guess
+		// whether the user had disconnected before quitting the old release.
+		c.ConnectionWanted = false
+		c.ConsentVersion = 0
+		if c.ConsentAccepted && c.PersistCredentials {
+			c.ConsentVersion = 1 // The legacy approval covered revision 1 only.
+		}
 	}
 	return Validate(c)
 }

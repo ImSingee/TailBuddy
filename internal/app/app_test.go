@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"github.com/ImSingee/TailBuddy/internal/config"
 	"github.com/ImSingee/TailBuddy/internal/i18n"
 	"github.com/egoist/mygo/ui"
@@ -9,28 +10,21 @@ import (
 	"testing"
 )
 
-func TestInitialViewHasExplicitAccessConsent(t *testing.T) {
+func TestInitialViewKeepsConsentInDialog(t *testing.T) {
 	a := New()
 	tt := ui.NewTester(a.view, 760, 1000)
-	for _, key := range []string{"resting", "scopeTitle", "consent", "persist", "noTunnel"} {
+	for _, key := range []string{"resting", "scopeTitle", "noTunnel"} {
 		if !tt.HasText(a.t(key)) {
 			t.Errorf("missing %s", key)
 		}
 	}
-	if a.accessConsent || a.credentialConsent || a.subnets {
-		t.Fatal("network or storage permission defaulted on")
+	for _, key := range []string{"consent", "persist"} {
+		if tt.HasText(a.t(key)) {
+			t.Errorf("persistent checkbox %s", key)
+		}
 	}
-	if err := tt.Click(a.t("consent")); err != nil {
-		t.Fatal(err)
-	}
-	if !a.accessConsent || a.credentialConsent {
-		t.Fatal("access consent must not imply credential consent")
-	}
-	if err := tt.Click(a.t("persist")); err != nil {
-		t.Fatal(err)
-	}
-	if !a.credentialConsent {
-		t.Fatal("credential checkbox did not work")
+	if a.cfg.HasConsent() || a.accessConsent || a.credentialConsent || a.subnets {
+		t.Fatal("unsafe defaults")
 	}
 }
 func TestChineseViewAndNavigation(t *testing.T) {
@@ -116,6 +110,33 @@ func TestNativeViewSnapshots(t *testing.T) {
 				name += "-dark"
 			}
 			f, err := os.Create(dir + "/" + name + ".png")
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = png.Encode(f, tt.Image())
+			f.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestConsentDialogSnapshots(t *testing.T) {
+	dir := os.Getenv("TAILBUDDY_SNAPSHOT_DIR")
+	if dir == "" {
+		t.Skip("set TAILBUDDY_SNAPSHOT_DIR for dialog PNGs")
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "zh-Hans"} {
+		for _, size := range [][2]int{{760, 820}, {620, 620}} {
+			a := New()
+			a.words = i18n.New(lang)
+			a.consentOpen = true
+			tt := ui.NewTester(a.view, size[0], size[1])
+			f, err := os.Create(fmt.Sprintf("%s/%s-consent-%dx%d.png", dir, lang, size[0], size[1]))
 			if err != nil {
 				t.Fatal(err)
 			}

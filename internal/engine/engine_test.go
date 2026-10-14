@@ -158,6 +158,7 @@ func privateDir(t *testing.T) string {
 }
 func approvedConfig() config.Config {
 	c := config.Default()
+	c.ConsentVersion = config.CurrentConsentVersion
 	c.ConsentAccepted = true
 	c.PersistCredentials = true
 	c.SubnetConsentAccepted = true
@@ -218,6 +219,14 @@ func TestStartRequiresAllConsents(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 	c := approvedConfig()
+	c.ConsentVersion++
+	if err := e.Start(context.Background(), c); !errors.Is(err, ErrConsentRequired) {
+		t.Fatalf("stale consent started: %v", err)
+	}
+	if err := e.ApplyConfig(context.Background(), c); !errors.Is(err, ErrConsentRequired) {
+		t.Fatalf("stale consent applied: %v", err)
+	}
+	c = approvedConfig()
 	c.PersistCredentials = false
 	if err := e.Start(context.Background(), c); !errors.Is(err, ErrConsentRequired) {
 		t.Fatalf("got %v", err)
@@ -236,6 +245,7 @@ func TestStartRequiresAllConsents(t *testing.T) {
 func TestLifecycleRoutesAndExclusiveLock(t *testing.T) {
 	e, dir := testEngine(t, "")
 	c := approvedConfig()
+	c.ConnectionWanted = true
 	c.AdvertiseRoutes = []string{"192.168.20.0/24"}
 	if err := e.Start(context.Background(), c); err != nil {
 		t.Fatal(err)
@@ -262,7 +272,7 @@ func TestLifecycleRoutesAndExclusiveLock(t *testing.T) {
 	}
 	waitFor(t, time.Second, func() bool { return len(e.Status().ApprovedRoutes) == 0 })
 	loaded, err := config.Load(dir)
-	if err != nil || len(loaded.AdvertiseRoutes) != 0 {
+	if err != nil || len(loaded.AdvertiseRoutes) != 0 || !loaded.CanResume() {
 		t.Fatalf("routes not cleared: %+v %v", loaded, err)
 	}
 	pidBytes, _ := os.ReadFile(filepath.Join(dir, "fake.pid"))

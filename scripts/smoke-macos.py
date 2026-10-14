@@ -9,7 +9,7 @@ for language in ('en','zh-Hans'):
     r=subprocess.run([str(exe),'--print-locale','-AppleLanguages',f'({language})'],capture_output=True,text=True,check=True,timeout=20)
     assert r.stdout.strip()==language,(language,r.stdout,r.stderr)
     print(f'Bundle localization {language}: passed')
-# No helper starts: the UI never auto-connects, and smoke mode only opens its
-# native window + tray, lets the event loop draw, then quits after two seconds.
+# Smoke mode explicitly disables automatic reconnection, even with saved intent.
+# It opens the native window + tray, draws, then quits after two seconds.
 subprocess.run([str(exe),'--smoke-test'],check=True,timeout=30)
 print('Native menu bar/window startup and clean exit: passed; no tailnet joined')
