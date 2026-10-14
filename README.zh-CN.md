@@ -2,6 +2,10 @@
 
 [English](README.md)
 
+## 维护状态
+
+功能已经完备且测试可用，但因为我在用的 Surge 已经原生支持了 Tailscale 入站，所以该项目不再更新。
+
 **通过其他 Tailscale 设备访问 Mac 上的服务，同时保留你现有的上网和代理设置。**
 
 TailBuddy 常驻 macOS 菜单栏，让这台 Mac 在你的 Tailscale 私有网络中拥有独立身份。离开电脑时，也可以访问本机的开发网站、管理面板或其他服务。
