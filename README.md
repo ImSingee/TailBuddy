@@ -2,9 +2,8 @@
 
 [简体中文](README.zh-CN.md)
 
-## Maintenance status
-
-TailBuddy is feature-complete and has been tested to work. However, Surge, which I use, now natively supports inbound Tailscale connections, so I will no longer be updating this project.
+> [!NOTE]
+> TailBuddy is feature-complete and has been tested to work. However, Surge, which I use, now natively supports inbound Tailscale connections, so I will no longer be updating this project.
 
 **Access services on your Mac from your other Tailscale devices, while keeping your usual internet and proxy setup.**
 
