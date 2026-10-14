@@ -1,0 +1,13 @@
+/build/
+/dist/
+/.cache/
+*.dmg
+*.zip
+.DS_Store
+*.state
+*.key
+*.pem
+*.log
+
+__pycache__/
+*.pyc

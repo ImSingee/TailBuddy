@@ -1,0 +1,51 @@
+name: Verify and package
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Unit and headless MyGo Native tests
+        run: go test -race -count=1 ./...
+      - name: Static analysis
+        run: go vet ./...
+      - name: Formatting
+        run: test -z "$(gofmt -l cmd internal)"
+  macos:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Native platform unit tests (offline)
+        run: go test -race -count=1 ./...
+      - name: Package app and official userspace engine
+        run: scripts/build-macos.sh ${{ matrix.arch }}
+      - name: Inspect bundle
+        run: |
+          plutil -lint build/darwin-${{ matrix.arch }}/TailBuddy.app/Contents/Info.plist
+          codesign --verify --deep --strict build/darwin-${{ matrix.arch }}/TailBuddy.app
+          file build/darwin-${{ matrix.arch }}/TailBuddy.app/Contents/MacOS/TailBuddy
+          file build/darwin-${{ matrix.arch }}/TailBuddy.app/Contents/Helpers/tailscaled
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TailBuddy-macos-${{ matrix.arch }}
+          path: |
+            build/darwin-${{ matrix.arch }}/*.zip
+            build/darwin-${{ matrix.arch }}/SHA256SUMS
+          retention-days: 14
