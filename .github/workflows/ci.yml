@@ -14,7 +14,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Unit and headless MyGo Native tests
+      - name: Unit and headless UI tests
         run: go test -race -count=1 -v ./...
       - name: Static analysis
         run: go vet ./...

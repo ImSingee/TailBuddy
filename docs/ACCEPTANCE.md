@@ -7,9 +7,9 @@
 - `gofmt -l cmd internal` is empty
 - `scripts/build-macos.sh arm64` and `scripts/build-macos.sh amd64`
 - On macOS, `codesign --verify --deep --strict` and `plutil -lint`
-- Optional native-view software snapshots: `TAILBUDDY_SNAPSHOT_DIR=/tmp/tailbuddy-ui go test -count=1 ./internal/app`
+- Optional interface snapshots: `TAILBUDDY_SNAPSHOT_DIR=/tmp/tailbuddy-ui go test -count=1 ./internal/app`
 
-The screenshot test renders the actual MyGo Native view headlessly. It is not evidence of a macOS window, AppKit integration, Tailscale login, transport or subnet reachability.
+The screenshot test renders the app's interface without opening a window. It does not verify macOS window integration, Tailscale login, transport or subnet reachability.
 
 ## Interactive acceptance (requires owner approval and a Mac)
 
