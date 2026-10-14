@@ -131,7 +131,7 @@ func (a *App) ready() {
 	a.menu = mygo.NewMenu([]*mygo.MenuItem{
 		{ID: "status", Label: "TailBuddy · " + a.t("offline"), Disabled: true},
 		{Label: a.t("settings"), Click: func(*mygo.MenuItem, *mygo.Window) { a.show() }},
-		{ID: "login", Label: a.t("login"), Disabled: true, Click: func(*mygo.MenuItem, *mygo.Window) { a.signIn() }},
+		{ID: "login", Label: a.t("login"), Hidden: true, Disabled: true, Click: func(*mygo.MenuItem, *mygo.Window) { a.signIn() }},
 		{ID: "disconnect", Label: a.t("disconnect"), Disabled: true, Click: func(*mygo.MenuItem, *mygo.Window) { a.disconnect() }},
 		mygo.Separator(), {Label: a.t("quit"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	})
@@ -200,7 +200,7 @@ func (a *App) refresh() {
 	}
 	if a.menu != nil {
 		a.menu.ItemByID("status").SetLabel("TailBuddy · " + a.statusLabel())
-		a.menu.ItemByID("login").SetEnabled(a.snapshot.Active && a.snapshot.BackendState != "Running" && !a.busy)
+		a.updateLoginMenuItem(a.menu.ItemByID("login"))
 		a.menu.ItemByID("disconnect").SetEnabled(a.snapshot.Active && !a.busy)
 	}
 	if a.tray != nil {
@@ -208,8 +208,25 @@ func (a *App) refresh() {
 	}
 	a.redraw()
 }
+
+// needsLogin is the shared visibility rule for the window and menu bar.
+// Starting, disconnected and approval-pending states are not login requests.
+func (a *App) needsLogin() bool {
+	return a.snapshot.Active && a.snapshot.BackendState == "NeedsLogin"
+}
+func (a *App) updateLoginMenuItem(item *mygo.MenuItem) {
+	item.SetVisible(a.needsLogin())
+	item.SetEnabled(a.needsLogin() && !a.busy && !a.quitting)
+}
 func (a *App) statusLabel() string {
-	if a.snapshot.LastError != "" || a.fatal != "" {
+	if a.fatal != "" {
+		return a.t("error")
+	}
+	// The last failure remains available in the error notice while recovery runs.
+	if a.snapshot.Active && (a.snapshot.BackendState == "Reconnecting" || (a.snapshot.BackendState == "Starting" && a.snapshot.RestartCount > 0)) {
+		return a.t("reconnecting")
+	}
+	if a.snapshot.LastError != "" {
 		return a.t("error")
 	}
 	if !a.snapshot.Active {
@@ -223,12 +240,40 @@ func (a *App) statusLabel() string {
 		return a.t("connected")
 	case "NeedsLogin":
 		return a.t("loginNeeded")
+	case "NeedsMachineAuth":
+		return a.t("awaitingApproval")
+	case "NoState", "":
+		return a.t("checkingStatus")
+	case "InUseOtherUser":
+		return a.t("inUse")
 	case "Stopped":
 		return a.t("stopped")
 	case "Starting":
 		return a.t("starting")
 	default:
 		return a.t("connecting")
+	}
+}
+
+// statusHelp keeps recovery/approval instructions reachable without presenting
+// an authentication action for states that do not request one.
+func (a *App) statusHelp() string {
+	if !a.snapshot.Active {
+		return ""
+	}
+	switch a.snapshot.BackendState {
+	case "NeedsMachineAuth":
+		return a.t("approvalHelp")
+	case "Stopped":
+		return a.t("stoppedHelp")
+	case "NoState", "":
+		return a.t("checkingStatusHelp")
+	case "InUseOtherUser":
+		return a.t("inUseHelp")
+	case "Starting", "Reconnecting", "NeedsLogin", "Running":
+		return ""
+	default:
+		return a.t("checkingStatusHelp")
 	}
 }
 func (a *App) run(action func() error, success string) {
@@ -322,9 +367,8 @@ func (a *App) save() {
 	}, a.t("saved"))
 }
 func (a *App) signIn() {
-	if a.engine == nil || !a.snapshot.Active {
-		a.message = a.t("connectFirst")
-		a.show()
+	// Ignore a stale menu/button callback after the reported state has changed.
+	if a.engine == nil || !a.needsLogin() || a.busy || a.quitting {
 		return
 	}
 	a.run(func() error {

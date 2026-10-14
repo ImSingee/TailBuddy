@@ -25,6 +25,15 @@ func (c Catalog) T(key string) string {
 }
 
 var en = map[string]string{
+	"reconnecting":       "Reconnecting",
+	"awaitingApproval":   "Waiting for device approval",
+	"approvalHelp":       "Sign-in is complete. A Tailscale administrator needs to approve this device before it can connect.",
+	"checkingStatus":     "Checking connection status",
+	"checkingStatusHelp": "Waiting for Tailscale to report its status. If this does not change, disconnect and connect again.",
+	"stoppedHelp":        "The node is stopped. Disconnect, then connect again to restart it.",
+	"inUse":              "Device in use by another user",
+	"inUseHelp":          "Tailscale reports that this device is in use by another user. Disconnect and try again after the other session has ended.",
+
 	"browserError":      "Could not open the browser. Please try signing in again.",
 	"tagline":           "Your Mac. A separate tailnet identity.",
 	"overview":          "Overview",
@@ -99,6 +108,15 @@ var en = map[string]string{
 	"restartLanguage":   "Restart TailBuddy after changing its macOS app language.",
 }
 var zh = map[string]string{
+	"reconnecting":       "正在重新连接",
+	"awaitingApproval":   "等待设备审批",
+	"approvalHelp":       "登录已完成。需要 Tailscale 管理员批准这台设备后才能连接。",
+	"checkingStatus":     "正在检查连接状态",
+	"checkingStatusHelp": "正在等待 Tailscale 返回状态。如果状态一直不变，可以先断开，再重新连接。",
+	"stoppedHelp":        "节点已停止。请先断开，再重新连接以启动节点。",
+	"inUse":              "设备正被其他用户使用",
+	"inUseHelp":          "Tailscale 报告这台设备正被其他用户使用。请先断开，待另一会话结束后重试。",
+
 	"browserError":      "无法打开浏览器，请重新尝试登录。",
 	"tagline":           "你的 Mac，独立的 tailnet 身份。",
 	"overview":          "概览",

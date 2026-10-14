@@ -82,14 +82,22 @@ func (a *App) overviewView(c *ui.Context) {
 			ui.Text(c, a.statusLabel()).FontSize(24).Bold()
 			a.pair(c, a.t("identity"), first(a.snapshot.DNSName, a.snapshot.Hostname, a.cfg.Hostname))
 			a.pair(c, a.t("address"), strings.Join(a.snapshot.TailscaleIPs, "\n"))
+			if help := a.statusHelp(); help != "" {
+				ui.Text(c, help).TextColor(c.Theme().TextMuted)
+			}
+			if a.snapshot.BackendState == "NeedsMachineAuth" {
+				ui.Link(c, a.t("admin"), "https://login.tailscale.com/admin/machines")
+			}
 		}
 		ui.Row(c).Gap(10).Wrap().Children(func() {
 			if a.snapshot.Active {
 				if ui.Button(c, a.t("disconnect")).Disabled(a.busy).Clicked() {
 					a.disconnect()
 				}
-				if ui.PrimaryButton(c, a.t("login")).Disabled(a.busy || a.snapshot.BackendState == "Running").Clicked() {
-					a.signIn()
+				if a.needsLogin() {
+					if ui.PrimaryButton(c, a.t("login")).Disabled(a.busy || a.quitting).Clicked() {
+						a.signIn()
+					}
 				}
 			} else {
 				if ui.PrimaryButton(c, a.t("connect")).Disabled(a.busy || a.engine == nil).Clicked() {
