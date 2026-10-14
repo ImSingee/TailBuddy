@@ -19,7 +19,7 @@
 
 1. 打开 [GitHub Actions](https://github.com/ImSingee/TailBuddy/actions/workflows/ci.yml)，选择对应提交的成功运行，下载 `TailBuddy-macos-arm64`（Apple silicon）或 `TailBuddy-macos-amd64`（Intel）。下载 Actions 附件需要登录 GitHub。
 2. 解压附件及其中的应用 zip，将 `TailBuddy.app` 放入「应用程序」。
-3. 构建仅做 ad-hoc 签名，**没有 Developer ID 签名或 Apple 公证**。首次尝试打开后，macOS 可能要求在「系统设置 → 隐私与安全性」中审阅并选择「仍要打开」。不要全局关闭 Gatekeeper。
+3. 构建仅做 ad-hoc 签名，**没有 Developer ID 签名或 Apple 公证**。macOS 可能阻止未公证应用。请审阅源码与构建来源，并遵循你所在组织的软件安装要求；目前未提供 Developer ID 签名及公证版本。
 4. 打开 TailBuddy，阅读访问范围，分别确认入站访问和凭据保存授权，点击「连接」，再点击「登录 Tailscale」。登录会创建独立设备。
 
 打开应用本身不会连接、登录或暴露服务。「登录 Mac 时打开」只启动菜单栏应用，不自动连接节点。每次重新打开应用都需主动连接。连接后，受控进程会对普通故障做有限重试。Tailscale 引擎处理网络变化，系统唤醒后应用刷新状态。

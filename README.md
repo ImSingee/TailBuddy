@@ -19,7 +19,7 @@ macOS 12+; Apple silicon and Intel builds are packaged separately.
 
 1. Open [Actions → Verify and package](https://github.com/ImSingee/TailBuddy/actions/workflows/ci.yml), choose a successful run for the commit you want, and download `TailBuddy-macos-arm64` (Apple silicon) or `TailBuddy-macos-amd64` (Intel). GitHub requires a sign-in to download Actions artifacts.
 2. Unzip the artifact and then the app zip inside it. Move `TailBuddy.app` to Applications.
-3. The builds use **ad-hoc signing only**. They are **not Developer ID signed or notarized**. macOS may require you to review the app under System Settings → Privacy & Security → Open Anyway after attempting to open it. Do not disable Gatekeeper globally.
+3. The builds use **ad-hoc signing only**. They are **not Developer ID signed or notarized**. macOS may block an unnotarized app. Review the source and build provenance and follow your organization’s installation policy; a Developer ID-signed, notarized distribution is not currently provided.
 4. Open TailBuddy, review the access warnings and explicitly authorize both inbound access and credential storage. Click Connect, then Sign in to Tailscale. This creates a separate tailnet device.
 
 No connection or sign-in happens just by opening the app. Open-at-login launches the menu bar app only, not the node. You must explicitly connect each app session; once connected, a bounded supervisor recovers from ordinary helper failures. The Tailscale engine handles network changes, and status refreshes after wake.
